@@ -11,121 +11,152 @@ extern "C" {
  *  (https://lists.linuxfoundation.org/pipermail/lightning-dev/2019-November/002316.html
  *  and https://github.com/LLFourn/one-time-VES/blob/master/main.pdf).
  *
- *  Note that at this module is currently a work in progress. It's not secure
- *  nor stable. Let me repeat: IT IS EXTREMELY DANGEROUS AND RECKLESS TO USE
- *  THIS MODULE IN PRODUCTION. DON'T!
+ *  WARNING! DANGER AHEAD!
+ *  As mentioned in Lloyd Fournier's paper, the adaptor signature leaks the
+ *  Elliptic-curve Diffie–Hellman (ECDH) key between the signing key and the
+ *  encryption key. This is not a problem for ECDSA adaptor signatures
+ *  themselves, but may result in a complete loss of security when they are
+ *  composed with other schemes. More specifically, let us refer to the
+ *  signer's public key as X = x*G, and to the encryption key as Y = y*G.
+ *  Given X, Y and the adaptor signature, it is trivial to compute Y^x = X^y.
  *
- *  This module passes a rudimentary test suite. But there are some things left
- *  TODO:
- *    - add API tests
- *    - add tests for the various overflow conditions
- *    - refactor adaptor verify to reuse code from secp256k1_ecdsa_verify()
- *    - test ecdsa_adaptor_sig_verify() more systematically. This is the most
- *      crucial function in this module. If it passes, we need to be sure that
- *      it is possible to compute the adaptor secret from the final ecdsa
- *      signature.
- *    - add ecdsa_adaptor_sign(), ecdsa_adaptor_adapt() and
- *      ecdsa_adaptor_extract_secret() to valgrind_ctime_test.c
- *    - allow using your own nonce function (noncefp, noncedata, synthetic
- *      nonces)
- *    - test module in travis
- *    - add comments to ease review
+ *  A defense is to not reuse the signing key of ECDSA adaptor signatures in
+ *  protocols that rely on the hardness of the CDH problem, e.g., Diffie-Hellman
+ *  key exchange and ElGamal encryption. In general, it is a well-established
+ *  cryptographic practice to seperate keys for different purposes whenever
+ *  possible.
  */
 
-/** Adaptor sign ("EncSign")
+/** A pointer to a function to deterministically generate a nonce.
  *
- *  Creates an adaptor signature along with a proof to verify the adaptor
+ *  Same as secp256k1_nonce_function_hardened with the exception of using the
+ *  compressed 33-byte encoding for the pubkey argument.
+ *
+ *  Returns: 1 if a nonce was successfully generated. 0 will cause signing to
+ *           return an error.
+ *  Out:     nonce32:   pointer to a 32-byte array to be filled by the function
+ *  In:        msg32:   the 32-byte message hash being verified
+ *             key32:   pointer to a 32-byte secret key
+ *              pk33:   the 33-byte serialized pubkey corresponding to key32
+ *              algo:   pointer to an array describing the signature algorithm
+ *           algolen:   the length of the algo array
+ *              data:   arbitrary data pointer that is passed through
+ *
+ *  Except for test cases, this function should compute some cryptographic hash of
+ *  the message, the key, the pubkey, the algorithm description, and data.
+ */
+typedef int (*secp256k1_nonce_function_hardened_ecdsa_adaptor)(
+    unsigned char *nonce32,
+    const unsigned char *msg32,
+    const unsigned char *key32,
+    const unsigned char *pk33,
+    const unsigned char *algo,
+    size_t algolen,
+    void *data
+);
+
+/** A modified BIP-340 nonce generation function. If a data pointer is passed, it is
+ *  assumed to be a pointer to 32 bytes of auxiliary random data as defined in BIP-340.
+ *  The hash will be tagged with algo after removing all terminating null bytes.
+ */
+SECP256K1_API extern const secp256k1_nonce_function_hardened_ecdsa_adaptor secp256k1_nonce_function_ecdsa_adaptor;
+
+/** Encrypted Signing
+ *
+ *  Creates an adaptor signature, which includes a proof to verify the adaptor
  *  signature.
+ *  WARNING: Make sure you have read and understood the WARNING at the top of
+ *  this file and applied the suggested countermeasures.
  *
  *  Returns: 1 on success, 0 on failure
- *  Args:            ctx: a secp256k1 context object, initialized for signing
- *                        (cannot be NULL)
- *  Out:   adaptor_sig65: pointer to 65 byte to store the returned signature
- *                        (cannot be NULL)
- *       adaptor_proof97: pointer to 97 byte to store the adaptor proof (cannot be
- *                        NULL)
- *  In:         seckey32: pointer to 32 byte secret key corresponding to the
- *                        pubkey (cannot be NULL)
- *               adaptor: pointer to the adaptor point (cannot be NULL)
- *                 msg32: pointer to the 32-byte message to sign (cannot be NULL)
+ *  Args:             ctx: a secp256k1 context object, initialized for signing
+ *  Out:   adaptor_sig162: pointer to 162 byte to store the returned signature
+ *  In:          seckey32: pointer to 32 byte secret key that will be used for
+ *                         signing
+ *                 enckey: pointer to the encryption public key
+ *                  msg32: pointer to the 32-byte message hash to sign
+ *                noncefp: pointer to a nonce generation function. If NULL,
+ *                         secp256k1_nonce_function_ecdsa_adaptor is used
+ *                  ndata: pointer to arbitrary data used by the nonce generation
+ *                         function (can be NULL). If it is non-NULL and
+ *                         secp256k1_nonce_function_ecdsa_adaptor is used, then
+ *                         ndata must be a pointer to 32-byte auxiliary randomness
+ *                         as per BIP-340.
  */
-SECP256K1_API int secp256k1_ecdsa_adaptor_sign(
+SECP256K1_API int secp256k1_ecdsa_adaptor_encrypt(
     const secp256k1_context* ctx,
-    unsigned char *adaptor_sig65,
-    unsigned char *adaptor_proof97,
+    unsigned char *adaptor_sig162,
     unsigned char *seckey32,
-    const secp256k1_pubkey *adaptor,
-    const unsigned char *msg32
-) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(4);
+    const secp256k1_pubkey *enckey,
+    const unsigned char *msg32,
+    secp256k1_nonce_function_hardened_ecdsa_adaptor noncefp,
+    void *ndata
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(4) SECP256K1_ARG_NONNULL(5);
 
-/** Adaptor verify ("EncVrfy")
+/** Encryption Verification
  *
- *  Verifies that the adaptor secret can be extracted from the adaptor signature
+ *  Verifies that the adaptor decryption key can be extracted from the adaptor signature
  *  and the completed ECDSA signature.
  *
  *  Returns: 1 on success, 0 on failure
- *  Args:           ctx: a secp256k1 context object, initialized for verification
- *                       (cannot be NULL)
- *  In:   adaptor_sig65: pointer to 65-byte signature to verify (cannot be NULL)
- *               pubkey: pointer to the public key (cannot be NULL)
- *                msg32: pointer to the 32-byte message (cannot be NULL)
- *              adaptor: pointer to the adaptor point (cannot be NULL)
- *      adaptor_proof97: pointer to 97-byte adaptor proof (cannot be NULL)
+ *  Args:            ctx: a secp256k1 context object, initialized for verification
+ *  In:   adaptor_sig162: pointer to 162-byte signature to verify
+ *                pubkey: pointer to the public key corresponding to the secret key
+ *                        used for signing
+ *                 msg32: pointer to the 32-byte message hash being verified
+ *                enckey: pointer to the adaptor encryption public key
  */
-SECP256K1_API int secp256k1_ecdsa_adaptor_sig_verify(
+SECP256K1_API int secp256k1_ecdsa_adaptor_verify(
     const secp256k1_context* ctx,
-    const unsigned char *adaptor_sig65,
+    const unsigned char *adaptor_sig162,
     const secp256k1_pubkey *pubkey,
     const unsigned char *msg32,
-    const secp256k1_pubkey *adaptor,
-    const unsigned char *adaptor_proof97
-) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(4) SECP256K1_ARG_NONNULL(5) SECP256K1_ARG_NONNULL(6);
+    const secp256k1_pubkey *enckey
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(4) SECP256K1_ARG_NONNULL(5);
 
-/** Adapt signature ("DecSig")
+/** Signature Decryption
  *
- *  Creates an ECDSA signature from an adaptor signature and an adaptor secret.
+ *  Derives an ECDSA signature from an adaptor signature and an adaptor decryption key.
  *
  *  Returns: 1 on success, 0 on failure
- *  Args:             ctx: a secp256k1 context object (cannot be NULL)
- *  Out:              sig: pointer to the ecdsa signature to create (cannot
- *                         be NULL)
- *  In:  adaptor_secret32: pointer to 32-byte byte adaptor secret of the adaptor
- *                         point (cannot be NULL)
- *          adaptor_sig65: pointer to 65-byte byte adaptor sig (cannot be NULL)
+ *  Args:              ctx: a secp256k1 context object
+ *  Out:               sig: pointer to the ECDSA signature to create
+ *  In:           deckey32: pointer to 32-byte decryption secret key for the adaptor
+ *                          encryption public key
+ *          adaptor_sig162: pointer to 162-byte adaptor sig
  */
-SECP256K1_API int secp256k1_ecdsa_adaptor_adapt(
+SECP256K1_API int secp256k1_ecdsa_adaptor_decrypt(
     const secp256k1_context* ctx,
     secp256k1_ecdsa_signature *sig,
-    const unsigned char *adaptor_secret32,
-    const unsigned char *adaptor_sig65
+    const unsigned char *deckey32,
+    const unsigned char *adaptor_sig162
 ) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(4);
 
-/** Adaptor extract ("Rec")
+/** Decryption Key Recovery
  *
- *  Extracts the adaptor secret from the complete signature and the adaptor
+ *  Extracts the adaptor decryption key from the complete signature and the adaptor
  *  signature.
  *
  *  Returns: 1 on success, 0 on failure
  *  Args:             ctx: a secp256k1 context object, initialized for signing
- *                         (cannot be NULL)
- *  Out: adaptor_secret32: pointer to 32-byte adaptor secret of the adaptor point
- *                         (cannot be NULL)
- *  In:               sig: pointer to ecdsa signature to extract the adaptor_secret
- *                         from (cannot be NULL)
- *            adaptor_sig: pointer to adaptor sig to extract the adaptor_secret
- *                         from (cannot be NULL)
- *                adaptor: pointer to the adaptor point (cannot be NULL)
+ *  Out:         deckey32: pointer to 32-byte adaptor decryption key for the adaptor
+ *                         encryption public key
+ *  In:               sig: pointer to ECDSA signature to recover the adaptor decryption
+ *                         key from
+ *         adaptor_sig162: pointer to adaptor signature to recover the adaptor
+ *                         decryption key from
+ *                 enckey: pointer to the adaptor encryption public key
  */
-SECP256K1_API int secp256k1_ecdsa_adaptor_extract_secret(
+SECP256K1_API int secp256k1_ecdsa_adaptor_recover(
     const secp256k1_context* ctx,
-    unsigned char *adaptor_secret32,
+    unsigned char *deckey32,
     const secp256k1_ecdsa_signature *sig,
-    const unsigned char *adaptor_sig65,
-    const secp256k1_pubkey *adaptor
+    const unsigned char *adaptor_sig162,
+    const secp256k1_pubkey *enckey
 ) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(4) SECP256K1_ARG_NONNULL(5);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* SECP256K1_ADAPTOR_H */
+#endif /* SECP256K1_ECDSA_ADAPTOR_H */
