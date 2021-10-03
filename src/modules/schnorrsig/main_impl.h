@@ -219,6 +219,7 @@ int secp256k1_schnorrsig_compute_sigpoint(const secp256k1_context* ctx, secp256k
     VERIFY_CHECK(ctx != NULL);
     ARG_CHECK(secp256k1_ecmult_context_is_built(&ctx->ecmult_ctx));
     ARG_CHECK(msg32 != NULL);
+    ARG_CHECK(msglen != 32);
     ARG_CHECK(rx != NULL);
     ARG_CHECK(pubkey != NULL);
 
