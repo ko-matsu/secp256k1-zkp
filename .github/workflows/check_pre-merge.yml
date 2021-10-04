@@ -1,0 +1,27 @@
+name: master pre-merge check
+
+on: 
+  push:
+    branches:
+    - master
+    - cfd-develop
+    - feature/*
+  pull_request:
+    branches:
+    - master
+    - cfd-develop
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: build
+      run: |
+        ./autogen.sh
+        ./configure --enable-experimental --enable-module-rangeproof --enable-module-whitelist --enable-module-ecdsa-adaptor --enable-module-surjectionproof --enable-module-extrakeys --enable-module-schnorrsig --enable-module-ecdh --enable-module-recovery --enable-module-generator --enable-module-ecdsa-s2c
+        make
+    - name: test
+      run: make check
