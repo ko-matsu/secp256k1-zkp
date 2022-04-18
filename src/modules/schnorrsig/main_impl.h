@@ -229,7 +229,6 @@ int secp256k1_schnorrsig_compute_sigpoint(const secp256k1_context* ctx, secp256k
     secp256k1_ge sigpoint_ge;
 
     VERIFY_CHECK(ctx != NULL);
-    ARG_CHECK(secp256k1_ecmult_context_is_built(&ctx->ecmult_ctx));
     ARG_CHECK(msg32 != NULL);
     ARG_CHECK(msglen == 32);
     ARG_CHECK(rx != NULL);
@@ -251,7 +250,7 @@ int secp256k1_schnorrsig_compute_sigpoint(const secp256k1_context* ctx, secp256k
         return 0;
     }
 
-    if (!secp256k1_eckey_pubkey_tweak_mul(&ctx->ecmult_ctx, &pubkey_ge, &e)) {
+    if (!secp256k1_eckey_pubkey_tweak_mul(&pubkey_ge, &e)) {
         return 0;
     }
 
