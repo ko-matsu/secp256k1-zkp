@@ -21,7 +21,7 @@ jobs:
     - name: build
       run: |
         ./autogen.sh
-        ./configure --enable-experimental --enable-module-rangeproof --enable-module-whitelist --enable-module-ecdsa-adaptor --enable-module-surjectionproof --enable-module-extrakeys --enable-module-schnorrsig --enable-module-ecdh --enable-module-recovery --enable-module-generator --enable-module-ecdsa-s2c
+        ./configure --enable-experimental --enable-module-rangeproof --enable-module-whitelist --enable-module-ecdsa-adaptor --enable-module-surjectionproof --enable-module-extrakeys --enable-module-schnorrsig --enable-module-ecdh --enable-module-recovery --enable-module-generator --enable-module-ecdsa-s2c --enable-module-musig --enable-module-bppp
         make
     - name: test
       run: make check
