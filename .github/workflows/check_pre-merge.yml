@@ -1,0 +1,40 @@
+name: master pre-merge check
+
+on: 
+  push:
+    branches:
+    - master
+    - cfd-develop
+    - feature/*
+  pull_request:
+    branches:
+    - master
+    - cfd-develop
+
+jobs:
+  build-make:
+    name: build make
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - name: build
+      run: |
+        ./autogen.sh
+        ./configure --enable-experimental --enable-module-rangeproof --enable-module-whitelist --enable-module-ecdsa-adaptor --enable-module-surjectionproof --enable-module-extrakeys --enable-module-schnorrsig --enable-module-ecdh --enable-module-recovery --enable-module-generator --enable-module-ecdsa-s2c --enable-module-musig --enable-module-bppp --enable-module-schnorrsig-halfa
+        make
+    - name: test
+      run: make check
+
+  build-cmake:
+    name: build cmake
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - name: build
+      run: |
+        cmake -B build -DSECP256K1_EXPERIMENTAL=ON
+        cmake --build build -j$(nproc)
+    - name: test
+      run: ctest --test-dir build

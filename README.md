@@ -1,104 +1,133 @@
-libsecp256k1
-============
+libsecp256k1-zkp
+================
 
-[![Build Status](https://travis-ci.org/bitcoin-core/secp256k1.svg?branch=master)](https://travis-ci.org/bitcoin-core/secp256k1)
+![Dependencies: None](https://img.shields.io/badge/dependencies-none-success)
 
-Optimized C library for ECDSA signatures and secret/public key operations on curve secp256k1.
+A fork of [libsecp256k1](https://github.com/bitcoin-core/secp256k1) with support for advanced and experimental features
 
-This library is intended to be the highest quality publicly available library for cryptography on the secp256k1 curve. However, the primary focus of its development has been for usage in the Bitcoin system and usage unlike Bitcoin's may be less well tested, verified, or suffer from a less well thought out interface. Correct usage requires some care and consideration that the library is fit for your application's purpose.
+Added features:
+* Experimental module for ECDSA adaptor signatures.
+* Experimental module for ECDSA sign-to-contract.
+* Experimental modules for Confidential Assets (Pedersen commitments, range proofs, and [surjection proofs](src/modules/surjection/surjection.md)).
+* Experimental module for [address whitelisting](src/modules/whitelist/whitelist.md).
+* Experimental module for Schnorr signature half-aggregation.
 
-Features:
-* secp256k1 ECDSA signing/verification and key generation.
-* Additive and multiplicative tweaking of secret/public keys.
-* Serialization/parsing of secret keys, public keys, signatures.
-* Constant time, constant memory access signing and public key generation.
-* Derandomized ECDSA (via RFC6979 or with a caller provided function.)
-* Very efficient implementation.
-* Suitable for embedded systems.
-* Optional module for public key recovery.
-* Optional module for ECDH key exchange.
-
-Experimental features have not received enough scrutiny to satisfy the standard of quality of this library but are made available for testing and review by the community. The APIs of these features should not be considered stable.
-
-Implementation details
-----------------------
-
-* General
-  * No runtime heap allocation.
-  * Extensive testing infrastructure.
-  * Structured to facilitate review and analysis.
-  * Intended to be portable to any system with a C89 compiler and uint64_t support.
-  * No use of floating types.
-  * Expose only higher level interfaces to minimize the API surface and improve application security. ("Be difficult to use insecurely.")
-* Field operations
-  * Optimized implementation of arithmetic modulo the curve's field size (2^256 - 0x1000003D1).
-    * Using 5 52-bit limbs (including hand-optimized assembly for x86_64, by Diederik Huys).
-    * Using 10 26-bit limbs (including hand-optimized assembly for 32-bit ARM, by Wladimir J. van der Laan).
-  * Field inverses and square roots using a sliding window over blocks of 1s (by Peter Dettman).
-* Scalar operations
-  * Optimized implementation without data-dependent branches of arithmetic modulo the curve's order.
-    * Using 4 64-bit limbs (relying on __int128 support in the compiler).
-    * Using 8 32-bit limbs.
-* Group operations
-  * Point addition formula specifically simplified for the curve equation (y^2 = x^3 + 7).
-  * Use addition between points in Jacobian and affine coordinates where possible.
-  * Use a unified addition/doubling formula where necessary to avoid data-dependent branches.
-  * Point/x comparison without a field inversion by comparison in the Jacobian coordinate space.
-* Point multiplication for verification (a*P + b*G).
-  * Use wNAF notation for point multiplicands.
-  * Use a much larger window for multiples of G, using precomputed multiples.
-  * Use Shamir's trick to do the multiplication with the public key and the generator simultaneously.
-  * Use secp256k1's efficiently-computable endomorphism to split the P multiplicand into 2 half-sized ones.
-* Point multiplication for signing
-  * Use a precomputed table of multiples of powers of 16 multiplied with the generator, so general multiplication becomes a series of additions.
-  * Intended to be completely free of timing sidechannels for secret-key operations (on reasonable hardware/toolchains)
-    * Access the table with branch-free conditional moves so memory access is uniform.
-    * No data-dependent branches
-  * Optional runtime blinding which attempts to frustrate differential power analysis.
-  * The precomputed tables add and eventually subtract points for which no known scalar (secret key) is known, preventing even an attacker with control over the secret key used to control the data internally.
+Experimental features are made available for testing and review by the community. The APIs of these features should not be considered stable.
 
 Build steps
 -----------
 
-libsecp256k1 is built using autotools:
+Obtaining and verifying
+-----------------------
 
-    $ ./autogen.sh
-    $ ./configure
-    $ make
-    $ make check
-    $ sudo make install  # optional
+The git tag for each release (e.g. `v0.6.0`) is GPG-signed by one of the maintainers.
+For a fully verified build of this project, it is recommended to obtain this repository
+via git, obtain the GPG keys of the signing maintainer(s), and then verify the release
+tag's signature using git.
 
-Exhaustive tests
+This can be done with the following steps:
+
+1. Obtain the GPG keys listed in [SECURITY.md](./SECURITY.md).
+2. If possible, cross-reference these key IDs with another source controlled by its owner (e.g.
+   social media, personal website). This is to mitigate the unlikely case that incorrect 
+   content is being presented by this repository.
+3. Clone the repository: 
+    ```
+    git clone https://github.com/bitcoin-core/secp256k1
+    ```
+4. Check out the latest release tag, e.g. 
+    ```
+    git checkout v0.6.0
+    ```
+5. Use git to verify the GPG signature: 
+   ```
+   % git tag -v v0.6.0 | grep -C 3 'Good signature'
+
+   gpg: Signature made Mon 04 Nov 2024 12:14:44 PM EST
+   gpg:                using RSA key 4BBB845A6F5A65A69DFAEC234861DBF262123605
+   gpg: Good signature from "Jonas Nick <jonas@n-ck.net>" [unknown]
+   gpg:                 aka "Jonas Nick <jonasd.nick@gmail.com>" [unknown]
+   gpg: WARNING: This key is not certified with a trusted signature!
+   gpg:          There is no indication that the signature belongs to the owner.
+   Primary key fingerprint: 36C7 1A37 C9D9 88BD E825  08D9 B1A7 0E4F 8DCD 0366
+        Subkey fingerprint: 4BBB 845A 6F5A 65A6 9DFA  EC23 4861 DBF2 6212 3605
+   ```
+
+Building with Autotools
+-----------------------
+
+    $ ./autogen.sh       # Generate a ./configure script
+    $ ./configure        # Generate a build system
+    $ make               # Run the actual build process
+    $ make check         # Run the test suite
+    $ sudo make install  # Install the library into the system (optional)
+
+To compile optional modules (such as Schnorr signatures), you need to run `./configure` with additional flags (such as `--enable-module-schnorrsig`). Run `./configure --help` to see the full list of available flags. For experimental modules, you will also need `--enable-experimental` as well as a flag for each individual module, e.g. `--enable-module-rangeproof`.
+
+Building with CMake
+-------------------
+
+To maintain a pristine source tree, CMake encourages to perform an out-of-source build by using a separate dedicated build tree.
+
+### Building on POSIX systems
+
+    $ cmake -B build              # Generate a build system in subdirectory "build"
+    $ cmake --build build         # Run the actual build process
+    $ ctest --test-dir build      # Run the test suite
+    $ sudo cmake --install build  # Install the library into the system (optional)
+
+To compile optional modules (such as Schnorr signatures), you need to run `cmake` with additional flags (such as `-DSECP256K1_ENABLE_MODULE_SCHNORRSIG=ON`). Run `cmake -B build -LH` or `ccmake -B build` to see the full list of available flags.
+
+### Cross compiling
+
+To alleviate issues with cross compiling, preconfigured toolchain files are available in the `cmake` directory.
+For example, to cross compile for Windows:
+
+    $ cmake -B build -DCMAKE_TOOLCHAIN_FILE=cmake/x86_64-w64-mingw32.toolchain.cmake
+
+To cross compile for Android with [NDK](https://developer.android.com/ndk/guides/cmake) (using NDK's toolchain file, and assuming the `ANDROID_NDK_ROOT` environment variable has been set):
+
+    $ cmake -B build -DCMAKE_TOOLCHAIN_FILE="${ANDROID_NDK_ROOT}/build/cmake/android.toolchain.cmake" -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=28
+
+### Building on Windows
+
+The following example assumes Visual Studio 2022. Using clang-cl is recommended.
+
+In "Developer Command Prompt for VS 2022":
+
+    >cmake -B build -T ClangCL
+    >cmake --build build --config RelWithDebInfo
+
+Usage examples
 -----------
 
-    $ ./exhaustive_tests
+Usage examples can be found in the [examples](examples) directory. To compile them you need to configure with `--enable-examples`.
+  * [ECDSA example](examples/ecdsa.c)
+  * [Schnorr signatures example](examples/schnorr.c)
+  * [Deriving a shared secret (ECDH) example](examples/ecdh.c)
+  * [ElligatorSwift key exchange example](examples/ellswift.c)
+  * [MuSig2 Schnorr multi-signatures example](examples/musig.c)
 
-With valgrind, you might need to increase the max stack size:
+To compile the examples, make sure the corresponding modules are enabled.
 
-    $ valgrind --max-stackframe=2500000 ./exhaustive_tests
+Benchmark
+------------
+If configured with `--enable-benchmark` (which is the default), binaries for benchmarking the libsecp256k1-zkp functions will be present in the root directory after the build.
 
-Test coverage
------------
+To print the benchmark result to the command line:
 
-This library aims to have full coverage of the reachable lines and branches.
+    $ ./bench_name
 
-To create a test coverage report, configure with `--enable-coverage` (use of GCC is necessary):
+To create a CSV file for the benchmark result :
 
-    $ ./configure --enable-coverage
-
-Run the tests:
-
-    $ make check
-
-To create a report, `gcovr` is recommended, as it includes branch coverage reporting:
-
-    $ gcovr --exclude 'src/bench*' --print-summary
-
-To create a HTML report with coloured and annotated source code:
-
-    $ gcovr --exclude 'src/bench*' --html --html-details -o coverage.html
+    $ ./bench_name | sed '2d;s/ \{1,\}//g' > bench_name.csv
 
 Reporting a vulnerability
 ------------
 
 See [SECURITY.md](SECURITY.md)
+
+Contributing to libsecp256k1
+------------
+
+See [CONTRIBUTING.md](CONTRIBUTING.md)

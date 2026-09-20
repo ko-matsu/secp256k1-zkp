@@ -4,21 +4,18 @@
  * file COPYING or http://www.opensource.org/licenses/mit-license.php.*
  **********************************************************************/
 
-#ifndef SECP256K1_MODULE_SURJECTIONPROOF_TESTS
-#define SECP256K1_MODULE_SURJECTIONPROOF_TESTS
+#ifndef SECP256K1_MODULE_SURJECTIONPROOF_TESTS_H
+#define SECP256K1_MODULE_SURJECTIONPROOF_TESTS_H
 
-#include "testrand.h"
-#include "group.h"
-#include "include/secp256k1_generator.h"
-#include "include/secp256k1_rangeproof.h"
-#include "include/secp256k1_surjectionproof.h"
+#include "../../testrand.h"
+#include "../../group.h"
+#include "../../unit_test.h"
+#include "../../../include/secp256k1_generator.h"
+#include "../../../include/secp256k1_rangeproof.h"
+#include "../../../include/secp256k1_surjectionproof.h"
 
 static void test_surjectionproof_api(void) {
     unsigned char seed[32];
-    secp256k1_context *none = secp256k1_context_create(SECP256K1_CONTEXT_NONE);
-    secp256k1_context *sign = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
-    secp256k1_context *vrfy = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
-    secp256k1_context *both = secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY);
     secp256k1_fixed_asset_tag fixed_input_tags[10];
     secp256k1_fixed_asset_tag fixed_output_tag;
     secp256k1_generator ephemeral_input_tags[10];
@@ -29,177 +26,116 @@ static void test_surjectionproof_api(void) {
     size_t  serialized_len;
     secp256k1_surjectionproof proof;
     secp256k1_surjectionproof* proof_on_heap;
-    size_t n_inputs = sizeof(fixed_input_tags) / sizeof(fixed_input_tags[0]);
+    size_t n_inputs = ARRAY_SIZE(fixed_input_tags);
     size_t input_index;
-    int32_t ecount = 0;
     size_t i;
 
-    secp256k1_testrand256(seed);
-    secp256k1_context_set_error_callback(none, counting_illegal_callback_fn, &ecount);
-    secp256k1_context_set_error_callback(sign, counting_illegal_callback_fn, &ecount);
-    secp256k1_context_set_error_callback(vrfy, counting_illegal_callback_fn, &ecount);
-    secp256k1_context_set_error_callback(both, counting_illegal_callback_fn, &ecount);
-    secp256k1_context_set_illegal_callback(none, counting_illegal_callback_fn, &ecount);
-    secp256k1_context_set_illegal_callback(sign, counting_illegal_callback_fn, &ecount);
-    secp256k1_context_set_illegal_callback(vrfy, counting_illegal_callback_fn, &ecount);
-    secp256k1_context_set_illegal_callback(both, counting_illegal_callback_fn, &ecount);
+    testrand256(seed);
 
     for (i = 0; i < n_inputs; i++) {
-        secp256k1_testrand256(input_blinding_key[i]);
-        secp256k1_testrand256(fixed_input_tags[i].data);
-        CHECK(secp256k1_generator_generate_blinded(ctx, &ephemeral_input_tags[i], fixed_input_tags[i].data, input_blinding_key[i]));
+        testrand256(input_blinding_key[i]);
+        testrand256(fixed_input_tags[i].data);
+        CHECK(secp256k1_generator_generate_blinded(CTX, &ephemeral_input_tags[i], fixed_input_tags[i].data, input_blinding_key[i]));
     }
-    secp256k1_testrand256(output_blinding_key);
+    testrand256(output_blinding_key);
     memcpy(&fixed_output_tag, &fixed_input_tags[0], sizeof(fixed_input_tags[0]));
-    CHECK(secp256k1_generator_generate_blinded(ctx, &ephemeral_output_tag, fixed_output_tag.data, output_blinding_key));
+    CHECK(secp256k1_generator_generate_blinded(CTX, &ephemeral_output_tag, fixed_output_tag.data, output_blinding_key));
 
     /* check allocate_initialized */
-    CHECK(secp256k1_surjectionproof_allocate_initialized(none, &proof_on_heap, &input_index, fixed_input_tags, n_inputs, 0, &fixed_input_tags[0], 100, seed) == 0);
+    CHECK(secp256k1_surjectionproof_allocate_initialized(CTX, &proof_on_heap, &input_index, fixed_input_tags, n_inputs, 0, &fixed_input_tags[0], 100, seed) == 0);
     CHECK(proof_on_heap == 0);
-    CHECK(ecount == 0);
-    CHECK(secp256k1_surjectionproof_allocate_initialized(none, &proof_on_heap, &input_index, fixed_input_tags, n_inputs, 3, &fixed_input_tags[0], 100, seed) != 0);
+    CHECK(secp256k1_surjectionproof_allocate_initialized(CTX, &proof_on_heap, &input_index, fixed_input_tags, n_inputs, 3, &fixed_input_tags[0], 100, seed) != 0);
     CHECK(proof_on_heap != 0);
     secp256k1_surjectionproof_destroy(proof_on_heap);
-    CHECK(ecount == 0);
-    CHECK(secp256k1_surjectionproof_allocate_initialized(none, NULL, &input_index, fixed_input_tags, n_inputs, 3, &fixed_input_tags[0], 100, seed) == 0);
-    CHECK(ecount == 1);
-    CHECK(secp256k1_surjectionproof_allocate_initialized(none, &proof_on_heap, NULL, fixed_input_tags, n_inputs, 3, &fixed_input_tags[0], 100, seed) == 0);
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_allocate_initialized(CTX, NULL, &input_index, fixed_input_tags, n_inputs, 3, &fixed_input_tags[0], 100, seed));
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_allocate_initialized(CTX, &proof_on_heap, NULL, fixed_input_tags, n_inputs, 3, &fixed_input_tags[0], 100, seed));
     CHECK(proof_on_heap == 0);
-    CHECK(ecount == 2);
-    CHECK(secp256k1_surjectionproof_allocate_initialized(none, &proof_on_heap, &input_index, NULL, n_inputs, 3, &fixed_input_tags[0], 100, seed) == 0);
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_allocate_initialized(CTX, &proof_on_heap, &input_index, NULL, n_inputs, 3, &fixed_input_tags[0], 100, seed));
     CHECK(proof_on_heap == 0);
-    CHECK(ecount == 3);
-    CHECK(secp256k1_surjectionproof_allocate_initialized(none, &proof_on_heap, &input_index, fixed_input_tags, SECP256K1_SURJECTIONPROOF_MAX_N_INPUTS + 1, 3, &fixed_input_tags[0], 100, seed) == 0);
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_allocate_initialized(CTX, &proof_on_heap, &input_index, fixed_input_tags, SECP256K1_SURJECTIONPROOF_MAX_N_INPUTS + 1, 3, &fixed_input_tags[0], 100, seed));
     CHECK(proof_on_heap == 0);
-    CHECK(ecount == 4);
-    CHECK(secp256k1_surjectionproof_allocate_initialized(none, &proof_on_heap, &input_index, fixed_input_tags, n_inputs, n_inputs, &fixed_input_tags[0], 100, seed) != 0);
+    CHECK(secp256k1_surjectionproof_allocate_initialized(CTX, &proof_on_heap, &input_index, fixed_input_tags, n_inputs, n_inputs, &fixed_input_tags[0], 100, seed) != 0);
     CHECK(proof_on_heap != 0);
     secp256k1_surjectionproof_destroy(proof_on_heap);
-    CHECK(ecount == 4);
-    CHECK(secp256k1_surjectionproof_allocate_initialized(none, &proof_on_heap, &input_index, fixed_input_tags, n_inputs, n_inputs + 1, &fixed_input_tags[0], 100, seed) == 0);
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_allocate_initialized(CTX, &proof_on_heap, &input_index, fixed_input_tags, n_inputs, n_inputs + 1, &fixed_input_tags[0], 100, seed));
     CHECK(proof_on_heap == 0);
-    CHECK(ecount == 5);
-    CHECK(secp256k1_surjectionproof_allocate_initialized(none, &proof_on_heap, &input_index, fixed_input_tags, n_inputs, 3, NULL, 100, seed) == 0);
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_allocate_initialized(CTX, &proof_on_heap, &input_index, fixed_input_tags, n_inputs, 3, NULL, 100, seed));
     CHECK(proof_on_heap == 0);
-    CHECK(ecount == 6);
-    CHECK((secp256k1_surjectionproof_allocate_initialized(none, &proof_on_heap, &input_index, fixed_input_tags, n_inputs, 0, &fixed_input_tags[0], 0, seed) & 1) == 0);
+    CHECK((secp256k1_surjectionproof_allocate_initialized(CTX, &proof_on_heap, &input_index, fixed_input_tags, n_inputs, 0, &fixed_input_tags[0], 0, seed) & 1) == 0);
     CHECK(proof_on_heap == 0);
-    CHECK(ecount == 6);
-    CHECK(secp256k1_surjectionproof_allocate_initialized(none, &proof_on_heap, &input_index, fixed_input_tags, n_inputs, 0, &fixed_input_tags[0], 100, NULL) == 0);
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_allocate_initialized(CTX, &proof_on_heap, &input_index, fixed_input_tags, n_inputs, 0, &fixed_input_tags[0], 100, NULL));
     CHECK(proof_on_heap == 0);
-    CHECK(ecount == 7);
 
-    /* we are now going to test essentially the same functions, just without heap allocation.
-     * reset ecount. */
-    ecount = 0;
+    /* we are now going to test essentially the same functions, just without
+     * heap allocation. */
 
     /* check initialize */
-    CHECK(secp256k1_surjectionproof_initialize(none, &proof, &input_index, fixed_input_tags, n_inputs, 0, &fixed_input_tags[0], 100, seed) == 0);
-    CHECK(ecount == 0);
-    CHECK(secp256k1_surjectionproof_initialize(none, &proof, &input_index, fixed_input_tags, n_inputs, 3, &fixed_input_tags[0], 100, seed) != 0);
-    CHECK(ecount == 0);
-    CHECK(secp256k1_surjectionproof_initialize(none, NULL, &input_index, fixed_input_tags, n_inputs, 3, &fixed_input_tags[0], 100, seed) == 0);
-    CHECK(ecount == 1);
-    CHECK(secp256k1_surjectionproof_initialize(none, &proof, NULL, fixed_input_tags, n_inputs, 3, &fixed_input_tags[0], 100, seed) == 0);
-    CHECK(ecount == 2);
-    CHECK(secp256k1_surjectionproof_initialize(none, &proof, &input_index, NULL, n_inputs, 3, &fixed_input_tags[0], 100, seed) == 0);
-    CHECK(ecount == 3);
-    CHECK(secp256k1_surjectionproof_initialize(none, &proof, &input_index, fixed_input_tags, SECP256K1_SURJECTIONPROOF_MAX_N_INPUTS + 1, 3, &fixed_input_tags[0], 100, seed) == 0);
-    CHECK(ecount == 4);
-    CHECK(secp256k1_surjectionproof_initialize(none, &proof, &input_index, fixed_input_tags, n_inputs, n_inputs, &fixed_input_tags[0], 100, seed) != 0);
-    CHECK(ecount == 4);
-    CHECK(secp256k1_surjectionproof_initialize(none, &proof, &input_index, fixed_input_tags, n_inputs, n_inputs + 1, &fixed_input_tags[0], 100, seed) == 0);
-    CHECK(ecount == 5);
-    CHECK(secp256k1_surjectionproof_initialize(none, &proof, &input_index, fixed_input_tags, n_inputs, 3, NULL, 100, seed) == 0);
-    CHECK(ecount == 6);
-    CHECK((secp256k1_surjectionproof_initialize(none, &proof, &input_index, fixed_input_tags, n_inputs, 0, &fixed_input_tags[0], 0, seed) & 1) == 0);
-    CHECK(ecount == 6);
-    CHECK(secp256k1_surjectionproof_initialize(none, &proof, &input_index, fixed_input_tags, n_inputs, 0, &fixed_input_tags[0], 100, NULL) == 0);
-    CHECK(ecount == 7);
+    CHECK(secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, fixed_input_tags, n_inputs, 0, &fixed_input_tags[0], 100, seed) == 0);
+    CHECK(secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, fixed_input_tags, n_inputs, 3, &fixed_input_tags[0], 100, seed) != 0);
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_initialize(CTX, NULL, &input_index, fixed_input_tags, n_inputs, 3, &fixed_input_tags[0], 100, seed));
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_initialize(CTX, &proof, NULL, fixed_input_tags, n_inputs, 3, &fixed_input_tags[0], 100, seed));
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, NULL, n_inputs, 3, &fixed_input_tags[0], 100, seed));
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, fixed_input_tags, SECP256K1_SURJECTIONPROOF_MAX_N_INPUTS + 1, 3, &fixed_input_tags[0], 100, seed));
+    CHECK(secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, fixed_input_tags, n_inputs, n_inputs, &fixed_input_tags[0], 100, seed) != 0);
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, fixed_input_tags, n_inputs, n_inputs + 1, &fixed_input_tags[0], 100, seed));
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, fixed_input_tags, n_inputs, 3, NULL, 100, seed));
+    CHECK((secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, fixed_input_tags, n_inputs, 0, &fixed_input_tags[0], 0, seed) & 1) == 0);
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, fixed_input_tags, n_inputs, 0, &fixed_input_tags[0], 100, NULL));
 
-    CHECK(secp256k1_surjectionproof_initialize(none, &proof, &input_index, fixed_input_tags, n_inputs, 3, &fixed_input_tags[0], 100, seed) != 0);
+    CHECK(secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, fixed_input_tags, n_inputs, 3, &fixed_input_tags[0], 100, seed) != 0);
     /* check generate */
-    CHECK(secp256k1_surjectionproof_generate(none, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key) == 0);
-    CHECK(ecount == 8);
-    CHECK(secp256k1_surjectionproof_generate(vrfy, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key) == 0);
-    CHECK(ecount == 9);
+    CHECK(secp256k1_surjectionproof_generate(CTX, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key) != 0);
+    CHECK_ILLEGAL(STATIC_CTX, secp256k1_surjectionproof_generate(STATIC_CTX, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key));
 
-    CHECK(secp256k1_surjectionproof_generate(sign, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key) == 0);
-    CHECK(ecount == 10);
-    CHECK(secp256k1_surjectionproof_generate(both, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key) != 0);
-    CHECK(ecount == 10);
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_generate(CTX, NULL, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key));
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_generate(CTX, &proof, NULL, n_inputs, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key));
+    CHECK(secp256k1_surjectionproof_generate(CTX, &proof, ephemeral_input_tags, n_inputs - 1, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key) == 0);
+    CHECK(secp256k1_surjectionproof_generate(CTX, &proof, ephemeral_input_tags, 0, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key) == 0);
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_generate(CTX, &proof, ephemeral_input_tags, n_inputs, NULL, 0, input_blinding_key[0], output_blinding_key));
+    /* the below line "succeeds" but generates an invalid proof as the input_index is wrong. it is fairly expensive to detect this. should we? */
+    CHECK(secp256k1_surjectionproof_generate(CTX, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 1, input_blinding_key[0], output_blinding_key) != 0);
+    CHECK(secp256k1_surjectionproof_generate(CTX, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, n_inputs + 1, input_blinding_key[0], output_blinding_key) != 0);
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_generate(CTX, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 0, NULL, output_blinding_key));
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_generate(CTX, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 0, input_blinding_key[0], NULL));
 
-    CHECK(secp256k1_surjectionproof_generate(both, NULL, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key) == 0);
-    CHECK(ecount == 11);
-    CHECK(secp256k1_surjectionproof_generate(both, &proof, NULL, n_inputs, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key) == 0);
-    CHECK(ecount == 12);
-    CHECK(secp256k1_surjectionproof_generate(both, &proof, ephemeral_input_tags, n_inputs + 1, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key) == 0);
-    CHECK(ecount == 12);
-    CHECK(secp256k1_surjectionproof_generate(both, &proof, ephemeral_input_tags, n_inputs - 1, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key) == 0);
-    CHECK(ecount == 12);
-    CHECK(secp256k1_surjectionproof_generate(both, &proof, ephemeral_input_tags, 0, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key) == 0);
-    CHECK(ecount == 12);
-    CHECK(secp256k1_surjectionproof_generate(both, &proof, ephemeral_input_tags, n_inputs, NULL, 0, input_blinding_key[0], output_blinding_key) == 0);
-    CHECK(ecount == 13);
-    CHECK(secp256k1_surjectionproof_generate(both, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 1, input_blinding_key[0], output_blinding_key) != 0);
-    CHECK(ecount == 13);  /* the above line "succeeds" but generates an invalid proof as the input_index is wrong. it is fairly expensive to detect this. should we? */
-    CHECK(secp256k1_surjectionproof_generate(both, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, n_inputs + 1, input_blinding_key[0], output_blinding_key) != 0);
-    CHECK(ecount == 13);
-    CHECK(secp256k1_surjectionproof_generate(both, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 0, NULL, output_blinding_key) == 0);
-    CHECK(ecount == 14);
-    CHECK(secp256k1_surjectionproof_generate(both, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 0, input_blinding_key[0], NULL) == 0);
-    CHECK(ecount == 15);
-
-    CHECK(secp256k1_surjectionproof_generate(both, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key) != 0);
+    CHECK(secp256k1_surjectionproof_generate(CTX, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key) != 0);
     /* check verify */
-    CHECK(secp256k1_surjectionproof_verify(none, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag) == 0);
-    CHECK(ecount == 16);
-    CHECK(secp256k1_surjectionproof_verify(sign, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag) == 0);
-    CHECK(ecount == 17);
-    CHECK(secp256k1_surjectionproof_verify(vrfy, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag) != 0);
-    CHECK(ecount == 17);
+    CHECK(secp256k1_surjectionproof_verify(CTX, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag) == 1);
 
-    CHECK(secp256k1_surjectionproof_verify(vrfy, NULL, ephemeral_input_tags, n_inputs, &ephemeral_output_tag) == 0);
-    CHECK(ecount == 18);
-    CHECK(secp256k1_surjectionproof_verify(vrfy, &proof, NULL, n_inputs, &ephemeral_output_tag) == 0);
-    CHECK(ecount == 19);
-    CHECK(secp256k1_surjectionproof_verify(vrfy, &proof, ephemeral_input_tags, n_inputs - 1, &ephemeral_output_tag) == 0);
-    CHECK(ecount == 19);
-    CHECK(secp256k1_surjectionproof_verify(vrfy, &proof, ephemeral_input_tags, n_inputs + 1, &ephemeral_output_tag) == 0);
-    CHECK(ecount == 19);
-    CHECK(secp256k1_surjectionproof_verify(vrfy, &proof, ephemeral_input_tags, n_inputs, NULL) == 0);
-    CHECK(ecount == 20);
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_verify(CTX, NULL, ephemeral_input_tags, n_inputs, &ephemeral_output_tag));
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_verify(CTX, &proof, NULL, n_inputs, &ephemeral_output_tag));
+    CHECK(secp256k1_surjectionproof_verify(CTX, &proof, ephemeral_input_tags, n_inputs - 1, &ephemeral_output_tag) == 0);
+    CHECK(secp256k1_surjectionproof_verify(CTX, &proof, ephemeral_input_tags, n_inputs + 1, &ephemeral_output_tag) == 0);
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_verify(CTX, &proof, ephemeral_input_tags, n_inputs, NULL));
+
+    /* Test how surjectionproof_generate fails when the proof was not created
+     * with surjectionproof_initialize */
+    CHECK(secp256k1_surjectionproof_generate(CTX, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key) == 1);
+    {
+        secp256k1_surjectionproof tmp_proof = proof;
+        tmp_proof.n_inputs = 0;
+        CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_generate(CTX, &tmp_proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key));
+    }
+
+    CHECK(secp256k1_surjectionproof_generate(CTX, &proof, ephemeral_input_tags, n_inputs, &ephemeral_output_tag, 0, input_blinding_key[0], output_blinding_key) == 1);
 
     /* Check serialize */
     serialized_len = sizeof(serialized_proof);
-    CHECK(secp256k1_surjectionproof_serialize(none, serialized_proof, &serialized_len, &proof) != 0);
-    CHECK(ecount == 20);
+    CHECK(secp256k1_surjectionproof_serialize(CTX, serialized_proof, &serialized_len, &proof) != 0);
     serialized_len = sizeof(serialized_proof);
-    CHECK(secp256k1_surjectionproof_serialize(none, NULL, &serialized_len, &proof) == 0);
-    CHECK(ecount == 21);
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_serialize(CTX, NULL, &serialized_len, &proof));
     serialized_len = sizeof(serialized_proof);
-    CHECK(secp256k1_surjectionproof_serialize(none, serialized_proof, NULL, &proof) == 0);
-    CHECK(ecount == 22);
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_serialize(CTX, serialized_proof, NULL, &proof));
     serialized_len = sizeof(serialized_proof);
-    CHECK(secp256k1_surjectionproof_serialize(none, serialized_proof, &serialized_len, NULL) == 0);
-    CHECK(ecount == 23);
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_serialize(CTX, serialized_proof, &serialized_len, NULL));
 
     serialized_len = sizeof(serialized_proof);
-    CHECK(secp256k1_surjectionproof_serialize(none, serialized_proof, &serialized_len, &proof) != 0);
+    CHECK(secp256k1_surjectionproof_serialize(CTX, serialized_proof, &serialized_len, &proof) != 0);
     /* Check parse */
-    CHECK(secp256k1_surjectionproof_parse(none, &proof, serialized_proof, serialized_len) != 0);
-    CHECK(ecount == 23);
-    CHECK(secp256k1_surjectionproof_parse(none, NULL, serialized_proof, serialized_len) == 0);
-    CHECK(ecount == 24);
-    CHECK(secp256k1_surjectionproof_parse(none, &proof, NULL, serialized_len) == 0);
-    CHECK(ecount == 25);
-    CHECK(secp256k1_surjectionproof_parse(none, &proof, serialized_proof, 0) == 0);
-    CHECK(ecount == 25);
-
-    secp256k1_context_destroy(none);
-    secp256k1_context_destroy(sign);
-    secp256k1_context_destroy(vrfy);
-    secp256k1_context_destroy(both);
+    CHECK(secp256k1_surjectionproof_parse(CTX, &proof, serialized_proof, serialized_len) != 0);
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_parse(CTX, NULL, serialized_proof, serialized_len));
+    CHECK_ILLEGAL(CTX, secp256k1_surjectionproof_parse(CTX, &proof, NULL, serialized_len));
+    CHECK(secp256k1_surjectionproof_parse(CTX, &proof, serialized_proof, 0) == 0);
 }
 
 static void test_input_selection(size_t n_inputs) {
@@ -210,60 +146,60 @@ static void test_input_selection(size_t n_inputs) {
     size_t try_count = n_inputs * 100;
     secp256k1_surjectionproof proof;
     secp256k1_fixed_asset_tag fixed_input_tags[1000];
-    const size_t max_n_inputs = sizeof(fixed_input_tags) / sizeof(fixed_input_tags[0]) - 1;
+    const size_t max_n_inputs = ARRAY_SIZE(fixed_input_tags) - 1;
 
     CHECK(n_inputs < max_n_inputs);
-    secp256k1_testrand256(seed);
+    testrand256(seed);
 
     for (i = 0; i < n_inputs + 1; i++) {
-        secp256k1_testrand256(fixed_input_tags[i].data);
+        testrand256(fixed_input_tags[i].data);
     }
 
     /* cannot match output when told to use zero keys */
-    result = secp256k1_surjectionproof_initialize(ctx, &proof, &input_index, fixed_input_tags, n_inputs, 0, &fixed_input_tags[0], try_count, seed);
+    result = secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, fixed_input_tags, n_inputs, 0, &fixed_input_tags[0], try_count, seed);
     CHECK(result == 0);
-    CHECK(secp256k1_surjectionproof_n_used_inputs(ctx, &proof) == 0);
-    CHECK(secp256k1_surjectionproof_n_total_inputs(ctx, &proof) == n_inputs);
-    CHECK(secp256k1_surjectionproof_serialized_size(ctx, &proof) == 34 + (n_inputs + 7) / 8);
+    CHECK(secp256k1_surjectionproof_n_used_inputs(CTX, &proof) == 0);
+    CHECK(secp256k1_surjectionproof_n_total_inputs(CTX, &proof) == n_inputs);
+    CHECK(secp256k1_surjectionproof_serialized_size(CTX, &proof) == 34 + (n_inputs + 7) / 8);
     if (n_inputs > 0) {
         /* succeed in 100*n_inputs tries (probability of failure e^-100) */
-        result = secp256k1_surjectionproof_initialize(ctx, &proof, &input_index, fixed_input_tags, n_inputs, 1, &fixed_input_tags[0], try_count, seed);
+        result = secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, fixed_input_tags, n_inputs, 1, &fixed_input_tags[0], try_count, seed);
         CHECK(result > 0);
         CHECK(result < n_inputs * 10);
-        CHECK(secp256k1_surjectionproof_n_used_inputs(ctx, &proof) == 1);
-        CHECK(secp256k1_surjectionproof_n_total_inputs(ctx, &proof) == n_inputs);
-        CHECK(secp256k1_surjectionproof_serialized_size(ctx, &proof) == 66 + (n_inputs + 7) / 8);
+        CHECK(secp256k1_surjectionproof_n_used_inputs(CTX, &proof) == 1);
+        CHECK(secp256k1_surjectionproof_n_total_inputs(CTX, &proof) == n_inputs);
+        CHECK(secp256k1_surjectionproof_serialized_size(CTX, &proof) == 66 + (n_inputs + 7) / 8);
         CHECK(input_index == 0);
     }
 
     if (n_inputs >= 3) {
         /* succeed in 10*n_inputs tries (probability of failure e^-10) */
-        result = secp256k1_surjectionproof_initialize(ctx, &proof, &input_index, fixed_input_tags, n_inputs, 3, &fixed_input_tags[1], try_count, seed);
+        result = secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, fixed_input_tags, n_inputs, 3, &fixed_input_tags[1], try_count, seed);
         CHECK(result > 0);
-        CHECK(secp256k1_surjectionproof_n_used_inputs(ctx, &proof) == 3);
-        CHECK(secp256k1_surjectionproof_n_total_inputs(ctx, &proof) == n_inputs);
-        CHECK(secp256k1_surjectionproof_serialized_size(ctx, &proof) == 130 + (n_inputs + 7) / 8);
+        CHECK(secp256k1_surjectionproof_n_used_inputs(CTX, &proof) == 3);
+        CHECK(secp256k1_surjectionproof_n_total_inputs(CTX, &proof) == n_inputs);
+        CHECK(secp256k1_surjectionproof_serialized_size(CTX, &proof) == 130 + (n_inputs + 7) / 8);
         CHECK(input_index == 1);
 
         /* fail, key not found */
-        result = secp256k1_surjectionproof_initialize(ctx, &proof, &input_index, fixed_input_tags, n_inputs, 3, &fixed_input_tags[n_inputs], try_count, seed);
+        result = secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, fixed_input_tags, n_inputs, 3, &fixed_input_tags[n_inputs], try_count, seed);
         CHECK(result == 0);
 
         /* succeed on first try when told to use all keys */
-        result = secp256k1_surjectionproof_initialize(ctx, &proof, &input_index, fixed_input_tags, n_inputs, n_inputs, &fixed_input_tags[0], try_count, seed);
+        result = secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, fixed_input_tags, n_inputs, n_inputs, &fixed_input_tags[0], try_count, seed);
         CHECK(result == 1);
-        CHECK(secp256k1_surjectionproof_n_used_inputs(ctx, &proof) == n_inputs);
-        CHECK(secp256k1_surjectionproof_n_total_inputs(ctx, &proof) == n_inputs);
-        CHECK(secp256k1_surjectionproof_serialized_size(ctx, &proof) == 2 + 32 * (n_inputs + 1) + (n_inputs + 7) / 8);
+        CHECK(secp256k1_surjectionproof_n_used_inputs(CTX, &proof) == n_inputs);
+        CHECK(secp256k1_surjectionproof_n_total_inputs(CTX, &proof) == n_inputs);
+        CHECK(secp256k1_surjectionproof_serialized_size(CTX, &proof) == 2 + 32 * (n_inputs + 1) + (n_inputs + 7) / 8);
         CHECK(input_index == 0);
 
         /* succeed in less than 64 tries when told to use half keys. (probability of failure 2^-64) */
-        result = secp256k1_surjectionproof_initialize(ctx, &proof, &input_index, fixed_input_tags, n_inputs, n_inputs / 2, &fixed_input_tags[0], 64, seed);
+        result = secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, fixed_input_tags, n_inputs, n_inputs / 2, &fixed_input_tags[0], 64, seed);
         CHECK(result > 0);
         CHECK(result < 64);
-        CHECK(secp256k1_surjectionproof_n_used_inputs(ctx, &proof) == n_inputs / 2);
-        CHECK(secp256k1_surjectionproof_n_total_inputs(ctx, &proof) == n_inputs);
-        CHECK(secp256k1_surjectionproof_serialized_size(ctx, &proof) == 2 + 32 * (n_inputs / 2 + 1) + (n_inputs + 7) / 8);
+        CHECK(secp256k1_surjectionproof_n_used_inputs(CTX, &proof) == n_inputs / 2);
+        CHECK(secp256k1_surjectionproof_n_total_inputs(CTX, &proof) == n_inputs);
+        CHECK(secp256k1_surjectionproof_serialized_size(CTX, &proof) == 2 + 32 * (n_inputs / 2 + 1) + (n_inputs + 7) / 8);
         CHECK(input_index == 0);
     }
 }
@@ -281,8 +217,8 @@ static void test_input_selection_distribution_helper(const secp256k1_fixed_asset
         used_inputs[i] = 0;
     }
     for(j = 0; j < 10000; j++) {
-        secp256k1_testrand256(seed);
-        result = secp256k1_surjectionproof_initialize(ctx, &proof, &input_index, fixed_input_tags, n_input_tags, n_input_tags_to_use, &fixed_input_tags[0], 64, seed);
+        testrand256(seed);
+        result = secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, fixed_input_tags, n_input_tags, n_input_tags_to_use, &fixed_input_tags[0], 64, seed);
         CHECK(result > 0);
 
         for (i = 0; i < n_input_tags; i++) {
@@ -304,7 +240,7 @@ static void test_input_selection_distribution(void) {
     size_t used_inputs[4];
 
     for (i = 0; i < n_inputs; i++) {
-        secp256k1_testrand256(fixed_input_tags[i].data);
+        testrand256(fixed_input_tags[i].data);
     }
 
     /* If there is one input tag to use, initialize must choose the one equal to fixed_output_tag. */
@@ -377,7 +313,7 @@ static void test_gen_verify(size_t n_inputs, size_t n_used) {
     secp256k1_fixed_asset_tag fixed_input_tags[1000];
     secp256k1_generator ephemeral_input_tags[1000];
     unsigned char *input_blinding_key[1000];
-    const size_t max_n_inputs = sizeof(fixed_input_tags) / sizeof(fixed_input_tags[0]) - 1;
+    const size_t max_n_inputs = ARRAY_SIZE(fixed_input_tags) - 1;
     size_t try_count = n_inputs * 100;
     size_t key_index;
     size_t input_index;
@@ -387,24 +323,24 @@ static void test_gen_verify(size_t n_inputs, size_t n_used) {
     /* setup */
     CHECK(n_used <= n_inputs);
     CHECK(n_inputs < max_n_inputs);
-    secp256k1_testrand256(seed);
+    testrand256(seed);
 
     key_index = (((size_t) seed[0] << 8) + seed[1]) % n_inputs;
 
     for (i = 0; i < n_inputs + 1; i++) {
         input_blinding_key[i] = malloc(32);
-        secp256k1_testrand256(input_blinding_key[i]);
+        testrand256(input_blinding_key[i]);
         /* choose random fixed tag, except that for the output one copy from the key_index */
         if (i < n_inputs) {
-            secp256k1_testrand256(fixed_input_tags[i].data);
+            testrand256(fixed_input_tags[i].data);
         } else {
             memcpy(&fixed_input_tags[i], &fixed_input_tags[key_index], sizeof(fixed_input_tags[i]));
         }
-        CHECK(secp256k1_generator_generate_blinded(ctx, &ephemeral_input_tags[i], fixed_input_tags[i].data, input_blinding_key[i]));
+        CHECK(secp256k1_generator_generate_blinded(CTX, &ephemeral_input_tags[i], fixed_input_tags[i].data, input_blinding_key[i]));
     }
 
     /* test */
-    result = secp256k1_surjectionproof_initialize(ctx, &proof, &input_index, fixed_input_tags, n_inputs, n_used, &fixed_input_tags[key_index], try_count, seed);
+    result = secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, fixed_input_tags, n_inputs, n_used, &fixed_input_tags[key_index], try_count, seed);
     if (n_used == 0) {
         CHECK(result == 0);
         return;
@@ -412,32 +348,32 @@ static void test_gen_verify(size_t n_inputs, size_t n_used) {
     CHECK(result > 0);
     CHECK(input_index == key_index);
 
-    result = secp256k1_surjectionproof_generate(ctx, &proof, ephemeral_input_tags, n_inputs, &ephemeral_input_tags[n_inputs], input_index, input_blinding_key[input_index], input_blinding_key[n_inputs]);
+    result = secp256k1_surjectionproof_generate(CTX, &proof, ephemeral_input_tags, n_inputs, &ephemeral_input_tags[n_inputs], input_index, input_blinding_key[input_index], input_blinding_key[n_inputs]);
     CHECK(result == 1);
 
-    CHECK(secp256k1_surjectionproof_serialize(ctx, serialized_proof, &serialized_len, &proof));
-    CHECK(serialized_len == secp256k1_surjectionproof_serialized_size(ctx, &proof));
+    CHECK(secp256k1_surjectionproof_serialize(CTX, serialized_proof, &serialized_len, &proof));
+    CHECK(serialized_len == secp256k1_surjectionproof_serialized_size(CTX, &proof));
     CHECK(serialized_len == SECP256K1_SURJECTIONPROOF_SERIALIZATION_BYTES(n_inputs, n_used));
 
     /* trailing garbage */
     memcpy(&serialized_proof_trailing, &serialized_proof, serialized_len);
     serialized_proof_trailing[serialized_len] = seed[0];
-    CHECK(secp256k1_surjectionproof_parse(ctx, &proof, serialized_proof_trailing, serialized_len + 1) == 0);
+    CHECK(secp256k1_surjectionproof_parse(CTX, &proof, serialized_proof_trailing, serialized_len + 1) == 0);
 
-    CHECK(secp256k1_surjectionproof_parse(ctx, &proof, serialized_proof, serialized_len));
-    result = secp256k1_surjectionproof_verify(ctx, &proof, ephemeral_input_tags, n_inputs, &ephemeral_input_tags[n_inputs]);
+    CHECK(secp256k1_surjectionproof_parse(CTX, &proof, serialized_proof, serialized_len));
+    result = secp256k1_surjectionproof_verify(CTX, &proof, ephemeral_input_tags, n_inputs, &ephemeral_input_tags[n_inputs]);
     CHECK(result == 1);
 
     /* various fail cases */
     if (n_inputs > 1) {
-        result = secp256k1_surjectionproof_verify(ctx, &proof, ephemeral_input_tags, n_inputs, &ephemeral_input_tags[n_inputs - 1]);
+        result = secp256k1_surjectionproof_verify(CTX, &proof, ephemeral_input_tags, n_inputs, &ephemeral_input_tags[n_inputs - 1]);
         CHECK(result == 0);
 
         /* number of entries in ephemeral_input_tags array is less than proof.n_inputs */
         n_inputs -= 1;
-        result = secp256k1_surjectionproof_generate(ctx, &proof, ephemeral_input_tags, n_inputs, &ephemeral_input_tags[n_inputs], input_index, input_blinding_key[input_index], input_blinding_key[n_inputs]);
+        result = secp256k1_surjectionproof_generate(CTX, &proof, ephemeral_input_tags, n_inputs, &ephemeral_input_tags[n_inputs], input_index, input_blinding_key[input_index], input_blinding_key[n_inputs]);
         CHECK(result == 0);
-        result = secp256k1_surjectionproof_verify(ctx, &proof, ephemeral_input_tags, n_inputs, &ephemeral_input_tags[n_inputs - 1]);
+        result = secp256k1_surjectionproof_verify(CTX, &proof, ephemeral_input_tags, n_inputs, &ephemeral_input_tags[n_inputs - 1]);
         CHECK(result == 0);
         n_inputs += 1;
     }
@@ -445,7 +381,7 @@ static void test_gen_verify(size_t n_inputs, size_t n_used) {
     for (i = 0; i < n_inputs; i++) {
         /* flip bit */
         proof.used_inputs[i / 8] ^= (1 << (i % 8));
-        result = secp256k1_surjectionproof_verify(ctx, &proof, ephemeral_input_tags, n_inputs, &ephemeral_input_tags[n_inputs]);
+        result = secp256k1_surjectionproof_verify(CTX, &proof, ephemeral_input_tags, n_inputs, &ephemeral_input_tags[n_inputs]);
         CHECK(result == 0);
         /* reset the bit */
         proof.used_inputs[i / 8] ^= (1 << (i % 8));
@@ -459,6 +395,7 @@ static void test_gen_verify(size_t n_inputs, size_t n_used) {
 
 /* check that a proof with empty n_used_inputs is invalid */
 static void test_no_used_inputs_verify(void) {
+    const secp256k1_hash_ctx *hash_ctx = secp256k1_get_hash_context(CTX);
     secp256k1_surjectionproof proof;
     secp256k1_fixed_asset_tag fixed_input_tag;
     secp256k1_fixed_asset_tag fixed_output_tag;
@@ -476,51 +413,79 @@ static void test_no_used_inputs_verify(void) {
     memset(proof.used_inputs, 0, SECP256K1_SURJECTIONPROOF_MAX_N_INPUTS / 8);
 
     /* create different fixed input and output tags */
-    secp256k1_testrand256(fixed_input_tag.data);
-    secp256k1_testrand256(fixed_output_tag.data);
+    testrand256(fixed_input_tag.data);
+    testrand256(fixed_output_tag.data);
 
     /* blind fixed output tags with random blinding key */
-    secp256k1_testrand256(blinding_key);
-    CHECK(secp256k1_generator_generate_blinded(ctx, &ephemeral_input_tags[0], fixed_input_tag.data, blinding_key));
-    CHECK(secp256k1_generator_generate_blinded(ctx, &ephemeral_output_tag, fixed_output_tag.data, blinding_key));
+    testrand256(blinding_key);
+    CHECK(secp256k1_generator_generate_blinded(CTX, &ephemeral_input_tags[0], fixed_input_tag.data, blinding_key));
+    CHECK(secp256k1_generator_generate_blinded(CTX, &ephemeral_output_tag, fixed_output_tag.data, blinding_key));
 
     /* create "borromean signature" which is just a hash of metadata (pubkeys, etc) in this case */
     secp256k1_generator_load(&output, &ephemeral_output_tag);
-    secp256k1_surjection_genmessage(proof.data, ephemeral_input_tags, 1, &ephemeral_output_tag);
+    secp256k1_surjection_genmessage(hash_ctx, proof.data, ephemeral_input_tags, 1, &ephemeral_output_tag);
     secp256k1_sha256_initialize(&sha256_e0);
-    secp256k1_sha256_write(&sha256_e0, proof.data, 32);
-    secp256k1_sha256_finalize(&sha256_e0, proof.data);
+    secp256k1_sha256_write(hash_ctx, &sha256_e0, proof.data, 32);
+    secp256k1_sha256_finalize(hash_ctx, &sha256_e0, proof.data);
 
-    result = secp256k1_surjectionproof_verify(ctx, &proof, ephemeral_input_tags, n_ephemeral_input_tags, &ephemeral_output_tag);
+    result = secp256k1_surjectionproof_verify(CTX, &proof, ephemeral_input_tags, n_ephemeral_input_tags, &ephemeral_output_tag);
     CHECK(result == 0);
 }
 
-void test_bad_serialize(void) {
+static void test_bad_serialize(void) {
     secp256k1_surjectionproof proof;
     unsigned char serialized_proof[SECP256K1_SURJECTIONPROOF_SERIALIZATION_BYTES_MAX];
     size_t serialized_len;
 
     proof.n_inputs = 0;
+    memset(proof.used_inputs, 0, SECP256K1_SURJECTIONPROOF_MAX_N_INPUTS / 8);
+    memset(proof.data, 0, 32 * (1 + SECP256K1_SURJECTIONPROOF_MAX_USED_INPUTS));
+
     serialized_len = 2 + 31;
     /* e0 is one byte too short */
-    CHECK(secp256k1_surjectionproof_serialize(ctx, serialized_proof, &serialized_len, &proof) == 0);
+    CHECK(secp256k1_surjectionproof_serialize(CTX, serialized_proof, &serialized_len, &proof) == 0);
 }
 
-void test_bad_parse(void) {
+static void test_bad_parse(void) {
     secp256k1_surjectionproof proof;
     unsigned char serialized_proof0[] = { 0x00 };
     unsigned char serialized_proof1[] = { 0x01, 0x00 };
     unsigned char serialized_proof2[33] = { 0 };
 
     /* Missing total input count */
-    CHECK(secp256k1_surjectionproof_parse(ctx, &proof, serialized_proof0, sizeof(serialized_proof0)) == 0);
+    CHECK(secp256k1_surjectionproof_parse(CTX, &proof, serialized_proof0, sizeof(serialized_proof0)) == 0);
     /* Missing bitmap */
-    CHECK(secp256k1_surjectionproof_parse(ctx, &proof, serialized_proof1, sizeof(serialized_proof1)) == 0);
+    CHECK(secp256k1_surjectionproof_parse(CTX, &proof, serialized_proof1, sizeof(serialized_proof1)) == 0);
     /* Missing e0 value */
-    CHECK(secp256k1_surjectionproof_parse(ctx, &proof, serialized_proof2, sizeof(serialized_proof2)) == 0);
+    CHECK(secp256k1_surjectionproof_parse(CTX, &proof, serialized_proof2, sizeof(serialized_proof2)) == 0);
 }
 
-void test_fixed_vectors(void) {
+static void test_input_eq_output(void) {
+    secp256k1_surjectionproof proof;
+    secp256k1_fixed_asset_tag fixed_tag;
+    secp256k1_generator ephemeral_tag;
+    unsigned char blinding_key[32];
+    unsigned char entropy[32];
+    size_t input_index;
+
+    testrand256(fixed_tag.data);
+    testrand256(blinding_key);
+    testrand256(entropy);
+
+    CHECK(secp256k1_surjectionproof_initialize(CTX, &proof, &input_index, &fixed_tag, 1, 1, &fixed_tag, 100, entropy) == 1);
+    CHECK(input_index == 0);
+
+    /* Generation should fail */
+    CHECK(secp256k1_generator_generate_blinded(CTX, &ephemeral_tag, fixed_tag.data, blinding_key));
+    CHECK(!secp256k1_surjectionproof_generate(CTX, &proof, &ephemeral_tag, 1, &ephemeral_tag, input_index, blinding_key, blinding_key));
+
+    /* ...even when the blinding key is zero */
+    memset(blinding_key, 0, 32);
+    CHECK(secp256k1_generator_generate_blinded(CTX, &ephemeral_tag, fixed_tag.data, blinding_key));
+    CHECK(!secp256k1_surjectionproof_generate(CTX, &proof, &ephemeral_tag, 1, &ephemeral_tag, input_index, blinding_key, blinding_key));
+}
+
+static void test_fixed_vectors(void) {
     const unsigned char tag0_ser[] = {
         0x0a,
         0x1c, 0xa3, 0xdd, 0x12, 0x48, 0xdd, 0x4d, 0xd0, 0x04, 0x30, 0x47, 0x48, 0x75, 0xf5, 0xf5, 0xff,
@@ -617,70 +582,78 @@ void test_fixed_vectors(void) {
     secp256k1_generator output_tag;
     secp256k1_surjectionproof proof;
 
-    CHECK(secp256k1_generator_parse(ctx, &input_tags[0], tag0_ser));
-    CHECK(secp256k1_generator_parse(ctx, &input_tags[1], tag1_ser));
-    CHECK(secp256k1_generator_parse(ctx, &input_tags[2], tag2_ser));
-    CHECK(secp256k1_generator_parse(ctx, &input_tags[3], tag3_ser));
-    CHECK(secp256k1_generator_parse(ctx, &input_tags[4], tag4_ser));
-    CHECK(secp256k1_generator_parse(ctx, &output_tag, output_tag_ser));
+    CHECK(secp256k1_generator_parse(CTX, &input_tags[0], tag0_ser));
+    CHECK(secp256k1_generator_parse(CTX, &input_tags[1], tag1_ser));
+    CHECK(secp256k1_generator_parse(CTX, &input_tags[2], tag2_ser));
+    CHECK(secp256k1_generator_parse(CTX, &input_tags[3], tag3_ser));
+    CHECK(secp256k1_generator_parse(CTX, &input_tags[4], tag4_ser));
+    CHECK(secp256k1_generator_parse(CTX, &output_tag, output_tag_ser));
 
     /* check 1-of-1 */
-    CHECK(secp256k1_surjectionproof_parse(ctx, &proof, total1_used1, total1_used1_len));
-    CHECK(secp256k1_surjectionproof_verify(ctx, &proof, input_tags, 1, &output_tag));
+    CHECK(secp256k1_surjectionproof_parse(CTX, &proof, total1_used1, total1_used1_len));
+    CHECK(secp256k1_surjectionproof_verify(CTX, &proof, input_tags, 1, &output_tag));
     /* check 1-of-2 */
-    CHECK(secp256k1_surjectionproof_parse(ctx, &proof, total2_used1, total2_used1_len));
-    CHECK(secp256k1_surjectionproof_verify(ctx, &proof, input_tags, 2, &output_tag));
+    CHECK(secp256k1_surjectionproof_parse(CTX, &proof, total2_used1, total2_used1_len));
+    CHECK(secp256k1_surjectionproof_verify(CTX, &proof, input_tags, 2, &output_tag));
     /* check 2-of-3 */
-    CHECK(secp256k1_surjectionproof_parse(ctx, &proof, total3_used2, total3_used2_len));
-    CHECK(secp256k1_surjectionproof_verify(ctx, &proof, input_tags, 3, &output_tag));
+    CHECK(secp256k1_surjectionproof_parse(CTX, &proof, total3_used2, total3_used2_len));
+    CHECK(secp256k1_surjectionproof_verify(CTX, &proof, input_tags, 3, &output_tag));
     /* check 3-of-5 */
-    CHECK(secp256k1_surjectionproof_parse(ctx, &proof, total5_used3, total5_used3_len));
-    CHECK(secp256k1_surjectionproof_verify(ctx, &proof, input_tags, 5, &output_tag));
+    CHECK(secp256k1_surjectionproof_parse(CTX, &proof, total5_used3, total5_used3_len));
+    CHECK(secp256k1_surjectionproof_verify(CTX, &proof, input_tags, 5, &output_tag));
     /* check 5-of-5 */
-    CHECK(secp256k1_surjectionproof_parse(ctx, &proof, total5_used5, total5_used5_len));
-    CHECK(secp256k1_surjectionproof_verify(ctx, &proof, input_tags, 5, &output_tag));
+    CHECK(secp256k1_surjectionproof_parse(CTX, &proof, total5_used5, total5_used5_len));
+    CHECK(secp256k1_surjectionproof_verify(CTX, &proof, input_tags, 5, &output_tag));
 
     /* check invalid length fails */
-    CHECK(!secp256k1_surjectionproof_parse(ctx, &proof, total5_used5, total5_used3_len));
+    CHECK(!secp256k1_surjectionproof_parse(CTX, &proof, total5_used5, total5_used3_len));
     /* check invalid keys fail */
-    CHECK(secp256k1_surjectionproof_parse(ctx, &proof, total1_used1, total1_used1_len));
-    CHECK(!secp256k1_surjectionproof_verify(ctx, &proof, &input_tags[1], 1, &output_tag));
-    CHECK(!secp256k1_surjectionproof_verify(ctx, &proof, input_tags, 1, &input_tags[0]));
+    CHECK(secp256k1_surjectionproof_parse(CTX, &proof, total1_used1, total1_used1_len));
+    CHECK(!secp256k1_surjectionproof_verify(CTX, &proof, &input_tags[1], 1, &output_tag));
+    CHECK(!secp256k1_surjectionproof_verify(CTX, &proof, input_tags, 1, &input_tags[0]));
 
     /* Try setting 6 bits on the total5-used-5; check that parsing fails */
     memcpy(bad, total5_used5, total5_used5_len);
     bad[2] = 0x3f;  /* 0x1f -> 0x3f */
-    CHECK(!secp256k1_surjectionproof_parse(ctx, &proof, bad, total5_used5_len));
+    CHECK(!secp256k1_surjectionproof_parse(CTX, &proof, bad, total5_used5_len));
     /* Correct for the length */
-    CHECK(!secp256k1_surjectionproof_parse(ctx, &proof, bad, total5_used5_len + 32));
+    CHECK(!secp256k1_surjectionproof_parse(CTX, &proof, bad, total5_used5_len + 32));
     /* Alternately just turn off one of the "legit" bits */
     bad[2] = 0x37;  /* 0x1f -> 0x37 */
-    CHECK(!secp256k1_surjectionproof_parse(ctx, &proof, bad, total5_used5_len));
+    CHECK(!secp256k1_surjectionproof_parse(CTX, &proof, bad, total5_used5_len));
 
     /* Similarly try setting 4 bits on the total5-used-3, with one bit out of range */
     memcpy(bad, total5_used3, total5_used3_len);
     bad[2] = 0x35;  /* 0x15 -> 0x35 */
-    CHECK(!secp256k1_surjectionproof_parse(ctx, &proof, bad, total5_used3_len));
-    CHECK(!secp256k1_surjectionproof_parse(ctx, &proof, bad, total5_used3_len + 32));
+    CHECK(!secp256k1_surjectionproof_parse(CTX, &proof, bad, total5_used3_len));
+    CHECK(!secp256k1_surjectionproof_parse(CTX, &proof, bad, total5_used3_len + 32));
     bad[2] = 0x34;  /* 0x15 -> 0x34 */
-    CHECK(!secp256k1_surjectionproof_parse(ctx, &proof, bad, total5_used3_len));
+    CHECK(!secp256k1_surjectionproof_parse(CTX, &proof, bad, total5_used3_len));
 }
 
-void run_surjection_tests(void) {
-    test_surjectionproof_api();
-    test_fixed_vectors();
-
+static void test_input_selection_all(void) {
     test_input_selection(0);
     test_input_selection(1);
     test_input_selection(5);
     test_input_selection(SECP256K1_SURJECTIONPROOF_MAX_USED_INPUTS);
+}
 
-    test_input_selection_distribution();
+static void test_gen_verify_all(void) {
     test_gen_verify(10, 3);
     test_gen_verify(SECP256K1_SURJECTIONPROOF_MAX_N_INPUTS, SECP256K1_SURJECTIONPROOF_MAX_USED_INPUTS);
-    test_no_used_inputs_verify();
-    test_bad_serialize();
-    test_bad_parse();
 }
+
+/* --- Test registry --- */
+static const struct tf_test_entry tests_surjection[] = {
+    CASE1(test_surjectionproof_api),
+    CASE1(test_input_eq_output),
+    CASE1(test_fixed_vectors),
+    CASE1(test_input_selection_all),
+    CASE1(test_input_selection_distribution),
+    CASE1(test_gen_verify_all),
+    CASE1(test_no_used_inputs_verify),
+    CASE1(test_bad_serialize),
+    CASE1(test_bad_parse),
+};
 
 #endif
