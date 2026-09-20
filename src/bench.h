@@ -7,22 +7,18 @@
 #ifndef SECP256K1_BENCH_H
 #define SECP256K1_BENCH_H
 
+#include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include "sys/time.h"
 
-static int64_t gettime_i64(void) {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (int64_t)tv.tv_usec + (int64_t)tv.tv_sec * 1000000LL;
-}
+#include "tests_common.h"
 
 #define FP_EXP (6)
 #define FP_MULT (1000000LL)
 
 /* Format fixed point number. */
-void print_number(const int64_t x) {
+static void print_number(const int64_t x) {
     int64_t x_abs, y;
     int c, i, rounding, g; /* g = integer part size, c = fractional part size */
     size_t ptr;
@@ -63,7 +59,7 @@ void print_number(const int64_t x) {
             y /= 10;
         }
     } else if (c == 0) { /* fractional part is 0 */
-        buffer[--ptr] = '0'; 
+        buffer[--ptr] = '0';
     }
     buffer[--ptr] = '.';
     do {
@@ -79,7 +75,7 @@ void print_number(const int64_t x) {
     printf("%-*s", FP_EXP, &buffer[ptr + g]); /* Prints fractional part */
 }
 
-void run_benchmark(char *name, void (*benchmark)(void*, int), void (*setup)(void*), void (*teardown)(void*, int), void* data, int count, int iter) {
+static void run_benchmark(char *name, void (*benchmark)(void*, int), void (*setup)(void*), void (*teardown)(void*, int), void* data, int count, int iter) {
     int i;
     int64_t min = INT64_MAX;
     int64_t sum = 0;
@@ -113,7 +109,7 @@ void run_benchmark(char *name, void (*benchmark)(void*, int), void (*setup)(void
     printf("\n");
 }
 
-int have_flag(int argc, char** argv, char *flag) {
+static int have_flag(int argc, char** argv, char *flag) {
     char** argm = argv + argc;
     argv++;
     while (argv != argm) {
@@ -129,7 +125,7 @@ int have_flag(int argc, char** argv, char *flag) {
    returns:
       - 1 if the user entered an invalid argument
       - 0 if all the user entered arguments are valid */
-int have_invalid_args(int argc, char** argv, char** valid_args, size_t n) {
+static int have_invalid_args(int argc, char** argv, char** valid_args, size_t n) {
     size_t i;
     int found_valid;
     char** argm = argv + argc;
@@ -151,16 +147,22 @@ int have_invalid_args(int argc, char** argv, char** valid_args, size_t n) {
     return 0;
 }
 
-int get_iters(int default_iters) {
+static int get_iters(int default_iters) {
     char* env = getenv("SECP256K1_BENCH_ITERS");
     if (env) {
-        return strtol(env, NULL, 0);
+        char* endptr;
+        long int iters = strtol(env, &endptr, 0);
+        if (*endptr != '\0' || iters <= 0) {
+            printf("Error: Value of SECP256K1_BENCH_ITERS is not a positive integer: %s\n\n", env);
+            return 0;
+        }
+        return iters;
     } else {
         return default_iters;
     }
 }
 
-void print_output_table_header_row(void) {
+static void print_output_table_header_row(void) {
     char* bench_str = "Benchmark";     /* left justified */
     char* min_str = "    Min(us)    "; /* center alignment */
     char* avg_str = "    Avg(us)    ";
