@@ -235,10 +235,10 @@ int secp256k1_schnorrsig_compute_sigpoint(const secp256k1_context* ctx, secp256k
 
     /* tagged hash(r.x, pk.x, msg32) */
     secp256k1_schnorrsig_sha256_tagged(&sha);
-    secp256k1_sha256_write(&sha, rx_buf, 32);
-    secp256k1_sha256_write(&sha, pk_buf, 32);
-    secp256k1_sha256_write(&sha, msg32, 32);
-    secp256k1_sha256_finalize(&sha, buf);
+    secp256k1_sha256_write(secp256k1_get_hash_context(ctx), &sha, rx_buf, 32);
+    secp256k1_sha256_write(secp256k1_get_hash_context(ctx), &sha, pk_buf, 32);
+    secp256k1_sha256_write(secp256k1_get_hash_context(ctx), &sha, msg32, 32);
+    secp256k1_sha256_finalize(secp256k1_get_hash_context(ctx), &sha, buf);
 
     secp256k1_scalar_set_b32(&e, buf, NULL);
 
